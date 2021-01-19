@@ -3,6 +3,7 @@
 
 # Bot authorization
 src/auth.txt
+src/admins.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
