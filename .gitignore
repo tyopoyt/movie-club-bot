@@ -1,6 +1,9 @@
 # VSCode
 .vscode/
 
+# Bot authorization
+src/auth.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
