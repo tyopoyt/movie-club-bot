@@ -32,4 +32,6 @@ async def clear(context, amount='5'):
     except:
         await context.channel.send(f'\"{amount}\" is not a number')
 
-movie_bot.run('token_here')
+authfile = open('src\\auth.txt','r')
+auth = authfile.read()
+movie_bot.run(auth)
