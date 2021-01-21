@@ -6,6 +6,9 @@ from colorama import Fore
 from datetime import datetime
 from discord.ext import commands
 
+def setup(movie_bot):
+    movie_bot.add_cog(Strawpoll(movie_bot))
+
 class Strawpoll(commands.Cog):
     me_url = 'https://www.strawpoll.me/api/v2/polls'
     com_url = 'https://strawpoll.com/api/poll'
@@ -39,6 +42,7 @@ class Strawpoll(commands.Cog):
                 print('Poll is' + Fore.RED + ' INVALID' + Fore.WHITE)
                 return 'Error: Current poll is invalid (Has it been ended?)'
 
+            # check results of the poll
             for answer in response['poll']['poll_answers']:
                 if answer['votes'] > highest:
                     highest = answer['votes']
@@ -49,9 +53,9 @@ class Strawpoll(commands.Cog):
                 else:
                     losers.append({'answer': answer['answer'], 'votes': answer['votes']})
             
+            # format results message
             for answer in winners:
                 message += f"[ {answer['answer']}: {answer['votes']} votes ]\n"
-
             for answer in losers:
                 message += f"; {answer['answer']}: {answer['votes']} votes\n"
 
@@ -70,6 +74,7 @@ class Strawpoll(commands.Cog):
     async def makepoll(self, context, arg='com'):
         poll = {}
         url = ''
+
         if arg == 'com':
             data = { 
                      "poll": { 
@@ -104,7 +109,7 @@ class Strawpoll(commands.Cog):
         poll_file.write(json.dumps(poll))
         poll_file.close()
 
-    @commands.command(aliases=['currentpoll', 'poll'])
+    @commands.command(aliases=['currentpoll', 'cur'])
     async def current(self, context):
         await context.channel.send(content=self.cur_results('The current poll is here: <[link]>'))
 
@@ -127,7 +132,3 @@ class Strawpoll(commands.Cog):
                 print('Poll delete' + Fore.RED + ' ERROR' + Fore.WHITE)
         else:
             await context.channel.send('Error: Cannot delete strawpoll.me polls')
-
-
-def setup(movie_bot):
-    movie_bot.add_cog(Strawpoll(movie_bot))
