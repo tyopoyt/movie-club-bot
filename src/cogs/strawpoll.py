@@ -19,6 +19,7 @@ class Strawpoll(commands.Cog):
         self.headers['API-KEY'] = json.loads(config_file.read())['auth']['com']
         config_file.close()
 
+    # check the results of current poll and return a string that can be sent on discord
     def cur_results(self, prefix=''):
         poll_file = open('src\\poll.json','r')
         poll = json.loads(poll_file.read())
