@@ -1,9 +1,10 @@
 # VSCode
 .vscode/
 
-# Bot authorization
-src/auth.txt
-src/admins.txt
+# project-specific
+src/config.json
+src/poll.json
+activate.bat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -134,4 +135,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-activate.bat

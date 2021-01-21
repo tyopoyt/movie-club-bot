@@ -1,5 +1,6 @@
 import discord
 import os
+import json
 from colorama import Fore
 from discord.ext import commands
 
@@ -9,11 +10,11 @@ movie_bot = commands.Bot(command_prefix='!')
 async def on_ready():
     print('Logged on as ' + Fore.BLUE + str(movie_bot.user) + Fore.WHITE)
 
-@movie_bot.command(hidden=True)
+@movie_bot.command(hidden=True, aliases=['relaod'])
 async def reload(context):
     if str(context.message.author) in admins:
-        reload_cogs()
         await context.channel.purge(limit=1)
+        reload_cogs()
     else:
         await context.channel.purge(limit=1)
         await context.channel.send(context.message.author.mention + ' you do not have access to this command.')
@@ -31,13 +32,11 @@ def reload_cogs():
             movie_bot.reload_extension(f'cogs.{filename[:-3]}')
 
 # setup and login
-authfile = open('src\\auth.txt','r')
-auth = authfile.read()
-authfile.close()
-
-adminfile = open('src\\admins.txt','r')
-admins = adminfile.read().split(',')
-adminfile.close()
+config_file = open('src\\config.json','r')
+config = json.loads(config_file.read())
+auth = config['auth']
+admins = config['admins']
+config_file.close()
 
 load_cogs()
-movie_bot.run(auth)
+movie_bot.run(auth['discord'])

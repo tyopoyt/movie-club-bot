@@ -21,7 +21,7 @@ class Utilities(commands.Cog):
     async def time(self, context):
         await context.channel.send(f"Bot's local time is: {datetime.now().strftime('%a, %d %b %H:%M:%S')}")
 
-    @commands.command()
+    @commands.command(aliases=['purge', 'remove'])
     async def clear(self, context, amount='5'):
         try:
             amt = int(amount)
