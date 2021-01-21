@@ -17,7 +17,7 @@ class Strawpoll(commands.Cog):
         self.movie_bot = movie_bot
         config_file = open('src\\config.json', 'r') 
         self.headers['API-KEY'] = json.loads(config_file.read())['auth']['com']
-        authfile.close()
+        config_file.close()
 
     def cur_results(self, prefix=''):
         poll_file = open('src\\poll.json','r')
@@ -36,7 +36,7 @@ class Strawpoll(commands.Cog):
                 response = (requests.get(self.com_url + f"/{poll['data']['content_id']}").json())['content']
             except:
                 print('Poll is' + Fore.RED + ' INVALID' + Fore.WHITE)
-                return 'Error: Current poll is invalid'
+                return 'Error: Current poll is invalid (Has it been ended?)'
 
             for answer in response['poll']['poll_answers']:
                 if answer['votes'] > highest:
