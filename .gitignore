@@ -2,8 +2,7 @@
 .vscode/
 
 # project-specific
-savedata/config.json
-savedata/poll.json
+savedata/
 activate.bat
 old/
 

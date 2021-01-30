@@ -28,7 +28,7 @@ def load_cogs():
 def reload_cogs():
     for filename in os.listdir('src\\cogs'):
         if filename.endswith('.py'):
-            print('Reloading ' + yellow(filename[:-3]) + Fore.WHITE + ' cog')
+            print('Reloading ' + yellow(filename[:-3]) + ' cog')
             movie_bot.reload_extension(f'cogs.{filename[:-3]}')
 
 # setup and login

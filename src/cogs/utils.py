@@ -1,5 +1,6 @@
 import discord
 import sys
+import json
 from datetime import timedelta
 from datetime import datetime
 from discord.ext import commands
@@ -16,7 +17,40 @@ class Utilities(commands.Cog):
 
     @commands.command()
     async def dm(self, context):
-        await context.message.author.send('I see u')
+        user = context.message.author.id
+        await context.message.delete()
+
+        dm_file = open('savedata\\dms.json','r')
+        dms_dict = json.loads(dm_file.read())
+        dm_file.close()
+
+        if user not in dms_dict['dms']:
+            dms_dict['dms'].append(user)
+            dm_file = open('savedata\\dms.json','w')
+            dm_file.write(json.dumps(dms_dict))
+            dm_file.close()
+            await context.message.author.send("I'll send you dms when a new poll is created.")
+        else:
+            await context.message.author.send("You're already receiving dms when new polls are created.")
+
+    @commands.command()
+    async def nodm(self, context):
+        user = context.message.author.id
+        await context.message.delete()
+
+        dm_file = open('savedata\\dms.json','r')
+        dms_dict = json.loads(dm_file.read())
+        dm_file.close()
+
+        user = context.message.author.id
+        if user not in dms_dict['dms']:
+            await context.message.author.send("You weren't opted in to receive dms.")
+        else:
+            dms_dict['dms'].remove(user)
+            dm_file = open('savedata\\dms.json','w')
+            dm_file.write(json.dumps(dms_dict))
+            dm_file.close()
+            await context.message.author.send("You'll no longer receive dms when new polls are created.")         
 
     @commands.command()
     async def ping(self, context):

@@ -3,9 +3,10 @@ import asyncio
 import requests
 import pprint
 import json
-from colorama import Fore
+from utils.color_util import red, green
 from datetime import datetime
 from discord.ext import commands, tasks
+from utils.discord_util import get_or_fetch_user
 
 def setup(movie_bot):
     movie_bot.add_cog(Strawpoll(movie_bot))
@@ -21,11 +22,16 @@ class Strawpoll(commands.Cog):
     movie_bot = None
     poll_message = None
     poll = None
+    main_server = None
+    dev_id = None
 
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
-        config_file = open('savedata\\config.json', 'r') 
-        self.headers['API-KEY'] = json.loads(config_file.read())['auth']['com']
+        config_file = open('savedata\\config.json', 'r')
+        configs = json.loads(config_file.read())
+        self.headers['API-KEY'] = configs['auth']['com']
+        self.main_server = configs['server_id']
+        self.dev_id = configs['dev_id']
         config_file.close()
 
     # check the results of current poll and return a string that can be sent on discord
@@ -46,7 +52,7 @@ class Strawpoll(commands.Cog):
             try:
                 response = (requests.get(self.com_url + f"/{self.poll['data']['content_id']}").json())['content']
             except:
-                print('Poll is' + Fore.RED + ' INVALID' + Fore.WHITE)
+                print('Poll is ' + red('INVALID'))
                 return 'Error: Current poll is invalid (Has it been ended?)'
 
             # check results of the poll
@@ -137,7 +143,19 @@ class Strawpoll(commands.Cog):
 
         poll_file = open('savedata\\poll.json','w')
         poll_file.write(json.dumps(self.poll))
-        poll_file.close()
+        poll_file.close()        
+
+        if context.channel.id == self.main_server:
+            dms_file = open('savedata\\dms.json','r')
+            dms = json.loads(dms_file.read())['dms']
+            dms_file.close()
+
+            for user_id in dms:
+                user = await get_or_fetch_user(self, user_id)
+                await user.send(f'New poll created in #{context.channel} in {context.guild}: {url}')
+        else:
+            user = await get_or_fetch_user(self, self.dev_id)
+            await user.send(f'New poll created in #{context.channel} in {context.guild}: {url}')
 
     @commands.command(aliases=['currentpoll', 'cur'])
     async def current(self, context):
@@ -161,10 +179,10 @@ class Strawpoll(commands.Cog):
             try:
                 resp = resp.json()
                 if resp['success']:
-                    print('Poll delete' + Fore.GREEN + ' successful' + Fore.WHITE)
+                    print('Poll delete ' + green('successful'))
                 else:
-                    print('Poll delete' + Fore.RED + ' unsuccessful' + Fore.WHITE)
+                    print('Poll delete ' + red('unsuccessful'))
             except:
-                print('Poll delete' + Fore.RED + ' ERROR' + Fore.WHITE)
+                print('Poll delete ' + red('ERROR'))
         else:
             await context.channel.send('Error: Cannot delete strawpoll.me polls')
