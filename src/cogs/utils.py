@@ -1,6 +1,9 @@
 import discord
+import sys
+from datetime import timedelta
 from datetime import datetime
 from discord.ext import commands
+from utils.color_util import magenta, red, green
 
 def setup(movie_bot):
     movie_bot.add_cog(Utilities(movie_bot))
@@ -24,7 +27,7 @@ class Utilities(commands.Cog):
     async def time(self, context):
         await context.channel.send(f"Bot's local time is: {datetime.now().strftime('%a, %d %b %H:%M:%S')}")
 
-    @commands.command(aliases=['purge', 'remove'])
+    @commands.command(hidden= True, aliases=['purge', 'remove'])
     async def clear(self, context, amount='5'):
         try:
             amt = int(amount)

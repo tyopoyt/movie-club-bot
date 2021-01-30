@@ -4,7 +4,7 @@ import json
 from utils.color_util import *
 from discord.ext import commands
 
-movie_bot = commands.Bot(command_prefix='!')
+movie_bot = commands.Bot(command_prefix='.')
 
 @movie_bot.event
 async def on_ready():

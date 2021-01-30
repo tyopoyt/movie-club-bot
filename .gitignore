@@ -5,6 +5,7 @@
 src/config.json
 src/poll.json
 activate.bat
+old/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
