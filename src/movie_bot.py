@@ -33,7 +33,7 @@ def reload_cogs():
 
 # setup and login
 print('Initializing', dark_blue('M') + blue('o') + dark_cyan('v') + cyan('i') + dark_green('e'), green('C') + dark_yellow('l') + yellow('u') + red('b'), dark_red('B') + magenta('o') + pink('t') + charcoal('...'))
-config_file = open('src\\config.json','r')
+config_file = open('savedata\\config.json','r')
 config = json.loads(config_file.read())
 auth = config['auth']
 admins = config['admins']

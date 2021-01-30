@@ -15,6 +15,10 @@ class Utilities(commands.Cog):
         self.movie_bot = movie_bot
 
     @commands.command()
+    async def dm(self, context):
+        await context.message.author.send('I see u')
+
+    @commands.command()
     async def ping(self, context):
         await context.channel.send('Pong!')
 

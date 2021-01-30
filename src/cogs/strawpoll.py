@@ -24,14 +24,14 @@ class Strawpoll(commands.Cog):
 
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
-        config_file = open('src\\config.json', 'r') 
+        config_file = open('savedata\\config.json', 'r') 
         self.headers['API-KEY'] = json.loads(config_file.read())['auth']['com']
         config_file.close()
 
     # check the results of current poll and return a string that can be sent on discord
     def cur_results(self, prefix='', ended=False):
         if self.poll is None:
-            poll_file = open('src\\poll.json','r')
+            poll_file = open('savedata\\poll.json','r')
             self.poll = json.loads(poll_file.read())
             poll_file.close()
 
@@ -135,7 +135,7 @@ class Strawpoll(commands.Cog):
             await context.channel.send(f'Unrecongnized poll site.  Options: {self.movie_bot.command_prefix}makepoll com or {self.movie_bot.command_prefix}makepoll me\n(Default is me)')
             return
 
-        poll_file = open('src\\poll.json','w')
+        poll_file = open('savedata\\poll.json','w')
         poll_file.write(json.dumps(self.poll))
         poll_file.close()
 
@@ -150,7 +150,7 @@ class Strawpoll(commands.Cog):
     @commands.command()
     async def end(self, context):
         if self.poll is None:
-            poll_file = open('src\\poll.json','r')
+            poll_file = open('savedata\\poll.json','r')
             self.poll = json.loads(poll_file.read())
             poll_file.close()
 
