@@ -3,7 +3,7 @@ import asyncio
 import requests
 import pprint
 import json
-from utils.color_util import red, green
+from utils.color_util import red, green, yellow
 from datetime import datetime
 from discord.ext import commands, tasks
 from utils.discord_util import get_or_fetch_user
@@ -43,7 +43,7 @@ class Strawpoll(commands.Cog):
 
         prefix = str(prefix).replace('[link]', self.poll['link'])
 
-        message = prefix + f"\n\n**{'Final ' if ended else ''}Results:**\n```ini\n"
+        message = prefix + f"\n```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\n**{'Final ' if ended else ''}Results:**\n```ini\n"
         highest = 0
         winners = []
         losers = []
@@ -91,12 +91,15 @@ class Strawpoll(commands.Cog):
         if not self.should_update:
             self.result_updater.stop()
             return
-        await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n\n**Results:**')]))
+        await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n```fix')]))
         await asyncio.sleep(self.result_updater.seconds)
 
-
     @commands.command()
+    @commands.guild_only()
     async def makepoll(self, context, arg='com'):
+        if self.poll is not None and self.poll['type'] == 'com':
+            await self.end(context, True)
+
         self.poll = {}
         url = ''
 
@@ -122,7 +125,10 @@ class Strawpoll(commands.Cog):
 
             if not self.should_update:
                 self.should_update = True
-                self.result_updater.start()
+                try:
+                    self.result_updater.start()
+                except:
+                    self.result_updater.restart()
 
         elif arg == 'me':
             data = { "title": "Vote for a genre to watch", "options": ["Sci-Fi", "Comedy", "Action/Adventure",
@@ -145,35 +151,41 @@ class Strawpoll(commands.Cog):
         poll_file.write(json.dumps(self.poll))
         poll_file.close()        
 
-        if context.channel.id == self.main_server:
+        if context.guild.id == self.main_server:
             dms_file = open('savedata\\dms.json','r')
             dms = json.loads(dms_file.read())['dms']
             dms_file.close()
 
             for user_id in dms:
                 user = await get_or_fetch_user(self, user_id)
-                await user.send(f'New poll created in #{context.channel} in {context.guild}: {url}')
+                await user.send(f"```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\nNew poll created in #{context.channel} in {context.guild}: {url}")
         else:
             user = await get_or_fetch_user(self, self.dev_id)
-            await user.send(f'New poll created in #{context.channel} in {context.guild}: {url}')
+            await user.send(f"```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\nNew poll created in #{context.channel} in {context.guild}: {url}")
 
     @commands.command(aliases=['currentpoll', 'cur'])
+    @commands.guild_only()
     async def current(self, context):
         content = self.cur_results('The current poll is here: <[link]>')
         self.poll_message = await context.channel.send(content=content)
         if not self.should_update and self.poll['type'] == 'com' and not str.startswith(content, 'Error'):
             self.should_update = True
-            self.result_updater.start()
+            try:
+                self.result_updater.start()
+            except:
+                self.result_updater.restart()
 
     @commands.command()
-    async def end(self, context):
+    @commands.guild_only()
+    async def end(self, context, silent=False):
         if self.poll is None:
             poll_file = open('savedata\\poll.json','r')
             self.poll = json.loads(poll_file.read())
             poll_file.close()
 
         if self.poll['type'] == 'com':
-            await context.channel.send(content=self.cur_results('**Ending the poll!**', ended=True))
+            if not silent:
+                await context.channel.send(content=self.cur_results('**Ending the poll!**', ended=True))
             self.should_update = False
             resp = requests.post(url=self.com_delete_url, headers=self.headers, data=f'{{"content_id": "{self.poll["data"]["content_id"]}"}}')
             try:

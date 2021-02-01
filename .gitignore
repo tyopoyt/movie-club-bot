@@ -2,9 +2,11 @@
 .vscode/
 
 # project-specific
-savedata/
-activate.bat
 old/
+savedata/
+testing/
+activate.bat
+*.pickle
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

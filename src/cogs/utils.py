@@ -15,7 +15,7 @@ class Utilities(commands.Cog):
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
 
-    @commands.command()
+    @commands.command(aliases=['dms'])
     async def dm(self, context):
         user = context.message.author.id
         await context.message.delete()
@@ -33,7 +33,7 @@ class Utilities(commands.Cog):
         else:
             await context.message.author.send("You're already receiving dms when new polls are created.")
 
-    @commands.command()
+    @commands.command(aliases=['nodms'])
     async def nodm(self, context):
         user = context.message.author.id
         await context.message.delete()
@@ -57,6 +57,7 @@ class Utilities(commands.Cog):
         await context.channel.send('Pong!')
 
     @commands.command()
+    @commands.guild_only()
     async def prefix(self, context, arg):
         self.movie_bot.command_prefix = arg
         await context.channel.send(f'The prefix is now {self.movie_bot.command_prefix}')
@@ -66,6 +67,8 @@ class Utilities(commands.Cog):
         await context.channel.send(f"Bot's local time is: {datetime.now().strftime('%a, %d %b %H:%M:%S')}")
 
     @commands.command(hidden= True, aliases=['purge', 'remove'])
+    @commands.has_permissions(manage_messages=True)
+    @commands.guild_only()
     async def clear(self, context, amount='5'):
         try:
             amt = int(amount)

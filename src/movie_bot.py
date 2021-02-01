@@ -12,11 +12,12 @@ async def on_ready():
 
 @movie_bot.command(hidden=True, aliases=['relaod'])
 async def reload(context):
-    if str(context.message.author) in admins:
+    if not isinstance(context.channel, discord.channel.DMChannel):
         await context.message.delete()
+
+    if str(context.message.author) in admins:        
         reload_cogs()
     else:
-        await context.message.delete()
         await context.channel.send(context.message.author.mention + ' you do not have access to this command.')
 
 def load_cogs():
