@@ -12,6 +12,7 @@ def setup(movie_bot):
 class Google(commands.Cog):
     credentials = None
     sheet_id = None
+    headers = None
 
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
@@ -27,9 +28,11 @@ class Google(commands.Cog):
 
         # Call the Sheets API
         sheet = service.spreadsheets()
-        result = sheet.values().get(spreadsheetId=self.sheet_id, range="Movies!A1:I72", majorDimension='COLUMNS').execute()
-        values = result.get('values', [])
-        # pprint(values)
+        result = sheet.values().get(spreadsheetId=self.sheet_id, range="Movies!A1:1", majorDimension='COLUMNS').execute()
+        self.headers = result.get('values', [])
 
         # result = sheet.get(spreadsheetId=self.sheet_id, ranges="Movies!A1:I72").execute()
         # pprint(result['sheets'])
+
+    def get_headers(unused):
+        return self.headers

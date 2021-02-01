@@ -1,12 +1,14 @@
 import discord
 import asyncio
 import requests
-import pprint
 import json
-from utils.color_util import red, green, yellow
+from pprint import pprint
+from utils.color_util import red, green, yellow, cyan
 from datetime import datetime
 from discord.ext import commands, tasks
 from utils.discord_util import get_or_fetch_user
+from utils.google_util import get_headers
+# from cogs.google import get_headers
 
 def setup(movie_bot):
     movie_bot.add_cog(Strawpoll(movie_bot))
@@ -15,9 +17,9 @@ class Strawpoll(commands.Cog):
     me_url = 'https://www.strawpoll.me/api/v2/polls'
     com_url = 'https://strawpoll.com/api/poll'
     com_delete_url = 'https://strawpoll.com/api/content/delete'
-    pp = pprint.PrettyPrinter(depth=6)
     headers = {}
     should_update = False
+    ended = False
     timing_task = None
     movie_bot = None
     poll_message = None
@@ -43,7 +45,7 @@ class Strawpoll(commands.Cog):
 
         prefix = str(prefix).replace('[link]', self.poll['link'])
 
-        message = prefix + f"\n```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\n**{'Final ' if ended else ''}Results:**\n```ini\n"
+        message = prefix + f"\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```\n**{'Final ' if ended else ''}Results:**\n```ini\n"
         highest = 0
         winners = []
         losers = []
@@ -56,6 +58,7 @@ class Strawpoll(commands.Cog):
                 return 'Error: Current poll is invalid (Has it been ended?)'
 
             # check results of the poll
+            #TODO: optimize this to show in order and use python's shit or maybe lodash
             for answer in response['poll']['poll_answers']:
                 if answer['votes'] > highest:
                     highest = answer['votes']
@@ -91,25 +94,43 @@ class Strawpoll(commands.Cog):
         if not self.should_update:
             self.result_updater.stop()
             return
-        await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n```fix')]))
+        try:
+            await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n```fix')]))
+        except discord.errors.NotFound:
+            print('Message ' + cyan('not found'))
+            print('Loop ' + red('stopped'))
+            self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
 
     @commands.command()
     @commands.guild_only()
-    async def makepoll(self, context, arg='com'):
-        if self.poll is not None and self.poll['type'] == 'com':
+    @commands.is_owner()
+    async def makepoll(self, context, poll_type='com'): # , options=None): #TODO: in the future allow manual poll creation?
+        usage = f'**Usage:** {self.movie_bot.command_prefix}makepoll [com/me] [title] > [poll options]'
+
+        if not self.ended and self.poll is not None and self.poll['type'] == 'com':
             await self.end(context, True)
 
+        def author_resp(message):
+            return message.author == context.author and message.channel == context.channel
+
+        await context.channel.send("What's the poll title?")
+        title = (await self.movie_bot.wait_for('message', check=author_resp)).content
+        # await context.channel.send("What are the options? (Comma separated)")
+        # answers = (await self.movie_bot.wait_for('message', check=author_resp)).content.split(',')
+
+        # answers = options.split(' ')
+        
+        answers = get_headers()
+        self.ended = False
         self.poll = {}
         url = ''
 
-        if arg == 'com':
+        if poll_type == 'com':
             data = { 
                      "poll": { 
-                         "title": "Vote for a genre to watch",
-                         "answers": ["Sci-Fi", "Comedy", "Action/Adventure",
-                                     "Horror", "Thriller", "Animated", "Drama",
-                                     "Shitpost", "TV Show"],
+                         "title": title,
+                         "answers": answers,
                          "ma": True
                          }
                     }
@@ -117,11 +138,11 @@ class Strawpoll(commands.Cog):
             data = response.json()
             url = f'https://strawpoll.com/{data["content_id"]}/'
 
-            self.poll['type'] = arg
+            self.poll['type'] = poll_type
             self.poll['link'] = url
             self.poll['data'] = data
 
-            self.poll_message = await context.channel.send(self.cur_results(f'Genre poll for this week: <{url}>'))
+            self.poll_message = await context.channel.send(self.cur_results(f'**{title}**: <{url}>'))
 
             if not self.should_update:
                 self.should_update = True
@@ -130,18 +151,22 @@ class Strawpoll(commands.Cog):
                 except:
                     self.result_updater.restart()
 
-        elif arg == 'me':
-            data = { "title": "Vote for a genre to watch", "options": ["Sci-Fi", "Comedy", "Action/Adventure",
-                    "Horror", "Thriller", "Animated", "Drama", "Shitpost", "TV Show"], "multi": True, "captcha": True }
+        elif poll_type == 'me':
+            data = { 
+                     "title": title,
+                     "options": answers,
+                     "multi": True,
+                     "captcha": True
+                   }
             response = requests.post(url=self.me_url, json=data)
             data = response.json()
             url = f'https://www.strawpoll.me/{data["id"]}/'
 
-            self.poll['type'] = arg
+            self.poll['type'] = poll_type
             self.poll['link'] = url
             self.poll['data'] = data
 
-            self.poll_message = await context.channel.send(f'Genre poll for this week: {url}')
+            self.poll_message = await context.channel.send(f'**{title}:** {url}')
 
         else:
             await context.channel.send(f'Unrecongnized poll site.  Options: {self.movie_bot.command_prefix}makepoll com or {self.movie_bot.command_prefix}makepoll me\n(Default is me)')
@@ -158,10 +183,10 @@ class Strawpoll(commands.Cog):
 
             for user_id in dms:
                 user = await get_or_fetch_user(self, user_id)
-                await user.send(f"```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\nNew poll created in #{context.channel} in {context.guild}: {url}")
+                await user.send(f"New poll \"{title}\" created in #{context.channel} in {context.guild}: <{url}>\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```")
         else:
             user = await get_or_fetch_user(self, self.dev_id)
-            await user.send(f"```fix\nYou may have to refresh the page if you're voting on a mobile device and it says scripts are blocked.```\nNew poll created in #{context.channel} in {context.guild}: {url}")
+            await user.send(f"New poll \"{title}\" created in #{context.channel} in {context.guild}: <{url}>\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```")
 
     @commands.command(aliases=['currentpoll', 'cur'])
     @commands.guild_only()
@@ -189,6 +214,7 @@ class Strawpoll(commands.Cog):
             self.should_update = False
             resp = requests.post(url=self.com_delete_url, headers=self.headers, data=f'{{"content_id": "{self.poll["data"]["content_id"]}"}}')
             try:
+                self.ended = True
                 resp = resp.json()
                 if resp['success']:
                     print('Poll delete ' + green('successful'))
