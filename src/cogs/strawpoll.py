@@ -50,7 +50,7 @@ class Strawpoll(commands.Cog):
         winners = []
         losers = []
 
-        if self.poll['type'] == 'com':
+        if self.poll['site'] == 'com':
             try:
                 response = (requests.get(self.com_url + f"/{self.poll['data']['content_id']}").json())['content']
             except:
@@ -105,10 +105,10 @@ class Strawpoll(commands.Cog):
     @commands.command()
     @commands.guild_only()
     @commands.is_owner()
-    async def makepoll(self, context, poll_type='com'): # , options=None): #TODO: in the future allow manual poll creation?
+    async def makepoll(self, context, poll_site='com'): # , options=None): #TODO: in the future allow manual poll creation?
         usage = f'**Usage:** {self.movie_bot.command_prefix}makepoll [com/me] [title] > [poll options]'
 
-        if not self.ended and self.poll is not None and self.poll['type'] == 'com':
+        if not self.ended and self.poll is not None and self.poll['site'] == 'com':
             await self.end(context, True)
 
         def author_resp(message):
@@ -126,7 +126,7 @@ class Strawpoll(commands.Cog):
         self.poll = {}
         url = ''
 
-        if poll_type == 'com':
+        if poll_site == 'com':
             data = { 
                      "poll": { 
                          "title": title,
@@ -138,7 +138,7 @@ class Strawpoll(commands.Cog):
             data = response.json()
             url = f'https://strawpoll.com/{data["content_id"]}/'
 
-            self.poll['type'] = poll_type
+            self.poll['site'] = poll_site
             self.poll['link'] = url
             self.poll['data'] = data
 
@@ -151,7 +151,7 @@ class Strawpoll(commands.Cog):
                 except:
                     self.result_updater.restart()
 
-        elif poll_type == 'me':
+        elif poll_site == 'me':
             data = { 
                      "title": title,
                      "options": answers,
@@ -162,7 +162,7 @@ class Strawpoll(commands.Cog):
             data = response.json()
             url = f'https://www.strawpoll.me/{data["id"]}/'
 
-            self.poll['type'] = poll_type
+            self.poll['site'] = poll_site
             self.poll['link'] = url
             self.poll['data'] = data
 
@@ -186,14 +186,14 @@ class Strawpoll(commands.Cog):
                 await user.send(f"New poll \"{title}\" created in #{context.channel} in {context.guild}: <{url}>\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```")
         else:
             user = await get_or_fetch_user(self, self.dev_id)
-            await user.send(f"New poll \"{title}\" created in #{context.channel} in {context.guild}: <{url}>\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```")
+            await user.send(f"**THIS MESSAGE WAS NOT DMed GLOBALLY**\nNew poll \"{title}\" created in #{context.channel} in {context.guild}: <{url}>\n```fix\nYou may have to refresh the page if the site says scripts are blocked.```")
 
     @commands.command(aliases=['currentpoll', 'cur'])
     @commands.guild_only()
     async def current(self, context):
         content = self.cur_results('The current poll is here: <[link]>')
         self.poll_message = await context.channel.send(content=content)
-        if not self.should_update and self.poll['type'] == 'com' and not str.startswith(content, 'Error'):
+        if not self.should_update and self.poll['site'] == 'com' and not str.startswith(content, 'Error'):
             self.should_update = True
             try:
                 self.result_updater.start()
@@ -208,7 +208,7 @@ class Strawpoll(commands.Cog):
             self.poll = json.loads(poll_file.read())
             poll_file.close()
 
-        if self.poll['type'] == 'com':
+        if self.poll['site'] == 'com':
             if not silent:
                 await context.channel.send(content=self.cur_results('**Ending the poll!**', ended=True))
             self.should_update = False
