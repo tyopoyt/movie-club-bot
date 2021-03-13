@@ -7,7 +7,7 @@ from utils.color_util import red, green, yellow, cyan
 from datetime import datetime
 from discord.ext import commands, tasks
 from utils.discord_util import get_or_fetch_user
-from utils.google_util import get_headers
+from utils.google_util import get_headers, get_column
 # from cogs.google import get_headers
 
 def setup(movie_bot):
@@ -26,6 +26,9 @@ class Strawpoll(commands.Cog):
     poll = None
     main_server = None
     dev_id = None
+    status = None
+    winners = None
+    context = None
 
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
@@ -35,6 +38,9 @@ class Strawpoll(commands.Cog):
         self.main_server = configs['server_id']
         self.dev_id = configs['dev_id']
         config_file.close()
+        self.status = "genre"
+        self.winners = None
+        self.context = None
 
     # check the results of current poll and return a string that can be sent on discord
     def cur_results(self, prefix='', ended=False):
@@ -55,10 +61,11 @@ class Strawpoll(commands.Cog):
                 response = (requests.get(self.com_url + f"/{self.poll['data']['content_id']}").json())['content']
             except:
                 print('Poll is ' + red('INVALID'))
+                self.should_update = False 
                 return 'Error: Current poll is invalid (Has it been ended?)'
 
             # check results of the poll
-            #TODO: optimize this to show in order and use python's shit or maybe lodash
+            #TODO: optimize this to show in order and use python's shit
             for answer in response['poll']['poll_answers']:
                 if answer['votes'] > highest:
                     highest = answer['votes']
@@ -79,6 +86,11 @@ class Strawpoll(commands.Cog):
 
             if not ended:
                 message += f"*(Updated {datetime.now().strftime('%a, %b %d  %H:%M:%S')} ET)*"
+
+            if highest == 0:
+                self.winners = []
+            else:
+                self.winners = winners
         else:
             try:                
                 response = requests.get(self.me_url + f"/{self.poll['data']['id']}").json()
@@ -102,10 +114,64 @@ class Strawpoll(commands.Cog):
             self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
 
+    @tasks.loop(seconds=7)
+    async def poll_watcher(self):
+        if self.status == 'genre':
+            await self.poll_message.channel.send(f'genre poll for {self.poll_watcher.seconds} seconds')
+            self.status = 'genre_ongoing'
+            self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+
+        elif self.status == 'genre_ongoing':
+            await self.end(self.context)
+            if self.status == 'genre_tie':
+                await self.makepoll(self.context, poll_title="Genre tiebreaker", status=self.status, options=list(map(lambda winner: winner['answer'], self.winners)), ma=False)
+                self.status = 'genre_tie_ongoing'
+                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+            elif self.status == 'movie':
+                await self.makepoll(self.context, poll_title="Vote for a movie", status=self.status, options=get_column(self.winners[0]['answer']), ma=False)
+                self.status = 'movie'
+                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+            else:
+                await self.stop(self.context)
+                await self.context.send('/////////////////////////\n**No votes recorded :(\nStopping polls.**\n/////////////////////////')
+
+        elif self.status == 'genre_tie_ongoing':
+            await self.end(self.context)
+            if self.status == 'genre_tie':
+                await self.makepoll(self.context, poll_title="Genre tiebreaker", status=self.status, options=list(map(lambda winner: winner['answer'], self.winners)), ma=False)
+                self.status = 'genre_tie_ongoing'
+                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+            else:
+                print('in watcher')
+                print(f"bruh {get_column(self.winners[0]['answer'])}")
+                await self.makepoll(self.context, poll_title="Vote for a movie", status=self.status, options=get_column(self.winners[0]['answer']), ma=False)
+                self.status = 'movie'
+                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+
+        elif self.status == 'movie':
+            pass
+
+        elif self.status == 'movie_ongoing':
+            pass
+
+        elif self.status == 'movie_tie_ongoing':
+            pass
+
+        
+        await asyncio.sleep(self.poll_watcher.seconds)
+
+    @commands.command(hidden=True)
+    @commands.guild_only()
+    @commands.is_owner()
+    async def stop(self, context):
+        self.poll_watcher.cancel()
+        self.poll_watcher.change_interval(seconds=30)
+        self.result_updater.cancel()
+
     @commands.command()
     @commands.guild_only()
     @commands.is_owner()
-    async def makepoll(self, context, poll_site='com'): # , options=None): #TODO: in the future allow manual poll creation?
+    async def makepoll(self, context, poll_site='com', poll_title=None, status="genre", options=None, ma=True): # , options=None): #TODO: in the future allow manual poll creation?
         usage = f'**Usage:** {self.movie_bot.command_prefix}makepoll [com/me] [title] > [poll options]'
 
         if not self.ended and self.poll is not None and self.poll['site'] == 'com':
@@ -114,14 +180,20 @@ class Strawpoll(commands.Cog):
         def author_resp(message):
             return message.author == context.author and message.channel == context.channel
 
-        await context.channel.send("What's the poll title?")
-        title = (await self.movie_bot.wait_for('message', check=author_resp)).content
-        # await context.channel.send("What are the options? (Comma separated)")
-        # answers = (await self.movie_bot.wait_for('message', check=author_resp)).content.split(',')
+        if poll_title is None:
+            await context.channel.send("What's the poll title?")
+            title = (await self.movie_bot.wait_for('message', check=author_resp)).content
+            # await context.channel.send("What are the options? (Comma separated)")
+            # answers = (await self.movie_bot.wait_for('message', check=author_resp)).content.split(',')
 
-        # answers = options.split(' ')
+            # answers = options.split(' ')
+        else:
+            title = poll_title
         
-        answers = get_headers()
+        if options is None:
+            answers = get_headers()
+        else:
+            answers = options
         self.ended = False
         self.poll = {}
         url = ''
@@ -131,7 +203,7 @@ class Strawpoll(commands.Cog):
                      "poll": { 
                          "title": title,
                          "answers": answers,
-                         "ma": True
+                         "ma": ma
                          }
                     }
             response = requests.post(url=self.com_url, json=data, headers=self.headers)
@@ -143,6 +215,8 @@ class Strawpoll(commands.Cog):
             self.poll['data'] = data
 
             self.poll_message = await context.channel.send(self.cur_results(f'**{title}**: <{url}>'))
+            self.status = status
+            self.context = context
 
             if not self.should_update:
                 self.should_update = True
@@ -150,6 +224,11 @@ class Strawpoll(commands.Cog):
                     self.result_updater.start()
                 except:
                     self.result_updater.restart()
+
+                try:
+                    self.poll_watcher.start()
+                except:
+                    self.poll_watcher.restart() 
 
         elif poll_site == 'me':
             data = { 
@@ -224,3 +303,35 @@ class Strawpoll(commands.Cog):
                 print('Poll delete ' + red('ERROR'))
         else:
             await context.channel.send('Error: Cannot delete strawpoll.me polls')
+        
+        if self.status == 'genre_ongoing':
+            if len(self.winners) == 0:
+                self.status = 'genre_absent'
+            elif len(self.winners) > 1:
+                self.status = 'genre_tie'
+            else:
+                self.status = 'movie'
+
+        elif self.status == 'genre_tie_ongoing':
+            if len(self.winners) == 0:
+                self.status = 'genre_tie_absent'
+            elif len(self.winners) > 1:
+                self.status = 'genre_tie_break'
+            else:
+                self.status = 'movie'
+
+        elif self.status == 'movie_ongoing':
+            if len(self.winners) == 0:
+                self.status = 'movie_absent'
+            elif len(self.winners) > 1:
+                self.status = 'movie_tie'
+            else:
+                self.status = 'ended'
+
+        elif self.status == 'movie_tie_ongoing':
+            if len(self.winners) == 0:
+                self.status = 'movie_tie_absent'
+            elif len(self.winners) > 1:
+                self.status = 'movie_tie_break'
+            else:
+                self.status = 'ended'

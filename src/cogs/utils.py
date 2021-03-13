@@ -1,6 +1,7 @@
 import discord
 import sys
 import json
+import pprint
 from datetime import timedelta
 from datetime import datetime
 from discord.ext import commands
@@ -11,9 +12,15 @@ def setup(movie_bot):
 
 class Utilities(commands.Cog):
     movie_bot = None
+    pp = None
 
     def __init__(self, movie_bot):
         self.movie_bot = movie_bot
+        self.pp = pprint.PrettyPrinter(depth=6)
+
+    @commands.command(hidden=True)
+    async def members(self, context):
+        self.pp.pprint(context.message.guild.members)
 
     @commands.command(aliases=['dms'])
     async def dm(self, context):
