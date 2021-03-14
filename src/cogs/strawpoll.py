@@ -2,6 +2,7 @@ import discord
 import asyncio
 import requests
 import json
+from random import randrange
 from pprint import pprint
 from utils.color_util import red, green, yellow, cyan
 from datetime import datetime
@@ -17,6 +18,11 @@ class Strawpoll(commands.Cog):
     me_url = 'https://www.strawpoll.me/api/v2/polls'
     com_url = 'https://strawpoll.com/api/poll'
     com_delete_url = 'https://strawpoll.com/api/content/delete'
+    lonely_message = '/////////////////////////\n**No votes recorded :(\nStopping polls.**\n/////////////////////////'
+    genre_interval = 10 #14400
+    movie_interval = 30 #1800
+    tie_interval = 10 #900
+    watch_seconds = 1
     headers = {}
     should_update = False
     ended = False
@@ -104,7 +110,7 @@ class Strawpoll(commands.Cog):
     @tasks.loop(minutes=1)
     async def result_updater(self):
         if not self.should_update:
-            self.result_updater.stop()
+            self.stop(self.context)
             return
         try:
             await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n```fix')]))
@@ -114,59 +120,125 @@ class Strawpoll(commands.Cog):
             self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
 
-    @tasks.loop(seconds=7)
+    # @tasks.loop(seconds=5)
     async def poll_watcher(self):
-        if self.status == 'genre':
-            await self.poll_message.channel.send(f'genre poll for {self.poll_watcher.seconds} seconds')
-            self.status = 'genre_ongoing'
-            self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+        # if not self.should_update:
+        #     self.stop(self.context)
+        #     return
+        while True:
+            # a fresh poll for genre this week
+            if self.status == 'genre':
+                self.status = 'genre_ongoing'
+                # self.poll_watcher.change_interval(seconds=self.genre_interval)
+                self.poll_watcher.restart()
 
-        elif self.status == 'genre_ongoing':
-            await self.end(self.context)
+            # initial genre poll is ending
+            elif self.status == 'genre_ongoing':
+                await self.end(self.context)
+
+                if self.status == 'genre_tie':
+                    await self.poll_watcher_macro(title="Genre tiebreaker", status='genre_tie', options=list(map(lambda winner: winner['answer'], self.winners)), ma=False, interval=1)
+
+                elif self.status == 'movie':
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[0]['answer']), ma=True, interval=1)
+
+                else:
+                    await self.stop(self.context)
+                    await self.context.send(self.lonely_message)
+
+            # genre tie is starting
             if self.status == 'genre_tie':
-                await self.makepoll(self.context, poll_title="Genre tiebreaker", status=self.status, options=list(map(lambda winner: winner['answer'], self.winners)), ma=False)
                 self.status = 'genre_tie_ongoing'
-                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
-            elif self.status == 'movie':
-                await self.makepoll(self.context, poll_title="Vote for a movie", status=self.status, options=get_column(self.winners[0]['answer']), ma=False)
-                self.status = 'movie'
-                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
-            else:
+                # self.poll_watcher.change_interval(seconds=self.tie_interval)
+                self.poll_watcher.restart()
+
+            # genre tiebreaker is ending
+            elif self.status == 'genre_tie_ongoing':
+                await self.end(self.context)
+
+                if self.status == 'movie':
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[0]['answer']), ma=True, interval=1) 
+
+                elif self.status == 'genre_tie_break':
+                    await self.context.send('**Breaking tie randomly.**')
+                    winner = randrange(0, len(self.winners))
+                    await self.context.send(f'**Tie broken to {self.winners[winner]["answer"]}.**')
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[winner]['answer']), ma=True, interval=1)
+
+                else:
+                    await self.stop(self.context)
+                    await self.context.send(self.lonely_message)
+
+            # inital movie poll starting
+            elif self.status in ['movie', 'genre_tie_break']:
+                self.status = 'movie_ongoing'
+                # self.poll_watcher.change_interval(seconds=self.movie_interval)
+                self.poll_watcher.restart()
+
+            # movie poll is ending
+            elif self.status == 'movie_ongoing':
+                await self.end(self.context)
+
+                if self.status == 'movie_tie':
+                    await self.poll_watcher_macro(title="Movie tiebreaker", status='movie_tie', options=list(map(lambda winner: winner['answer'], self.winners)), ma=False, interval=1)
+
+                elif self.status == 'ended':
+                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
+                    await self.stop(self.context)
+                    self.should_update = False
+
+                else:
+                    await self.stop(self.context)
+                    await self.context.send(self.lonely_message)
+                    self.should_update = False
+
+
+            if self.status == 'movie_tie':
+                self.status = 'movie_tie_ongoing'
+                # self.poll_watcher.change_interval(seconds=self.tie_interval)
+                self.poll_watcher.restart()
+
+            # movie tiebreaker is ending
+            elif self.status == 'movie_tie_ongoing':
+                await self.end(self.context)
+
+                if self.status == 'ended':
+                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
+                    await self.stop(self.context)
+                    self.should_update = False
+
+                elif self.status == 'movie_tie_break':
+                    await self.context.send('**Breaking tie randomly.**')
+                    winner = randrange(0, len(self.winners))
+                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[winner]['answer']}```")
+                    await self.stop(self.context)
+
+                else:
+                    await self.stop(self.context)
+                    await self.context.send(self.lonely_message)
+                    self.should_update = False
+
+            elif self.status in ['ended', 'movie_tie_break']:
+                self.status = "genre"
                 await self.stop(self.context)
-                await self.context.send('/////////////////////////\n**No votes recorded :(\nStopping polls.**\n/////////////////////////')
+                self.should_update = False
 
-        elif self.status == 'genre_tie_ongoing':
-            await self.end(self.context)
-            if self.status == 'genre_tie':
-                await self.makepoll(self.context, poll_title="Genre tiebreaker", status=self.status, options=list(map(lambda winner: winner['answer'], self.winners)), ma=False)
-                self.status = 'genre_tie_ongoing'
-                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
-            else:
-                print('in watcher')
-                print(f"bruh {get_column(self.winners[0]['answer'])}")
-                await self.makepoll(self.context, poll_title="Vote for a movie", status=self.status, options=get_column(self.winners[0]['answer']), ma=False)
-                self.status = 'movie'
-                self.poll_watcher.change_interval(seconds=self.poll_watcher.seconds)
+            await asyncio.sleep(self.poll_watcher.seconds)
 
-        elif self.status == 'movie':
-            pass
-
-        elif self.status == 'movie_ongoing':
-            pass
-
-        elif self.status == 'movie_tie_ongoing':
-            pass
-
-        
-        await asyncio.sleep(self.poll_watcher.seconds)
+    async def poll_watcher_macro(self, title, status, options, ma, interval):
+        await self.makepoll(self.context, poll_title=title, status=self.status, options=options, ma=ma)
+        self.status = status
+        # self.poll_watcher.change_interval(seconds=1)
+        # self.poll_watcher.restart()
 
     @commands.command(hidden=True)
     @commands.guild_only()
     @commands.is_owner()
     async def stop(self, context):
         self.poll_watcher.cancel()
-        self.poll_watcher.change_interval(seconds=30)
+        self.poll_watcher.change_interval(seconds=1)
         self.result_updater.cancel()
+        self.should_update = False
 
     @commands.command()
     @commands.guild_only()
