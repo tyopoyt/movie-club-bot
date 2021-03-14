@@ -2,7 +2,7 @@ import discord
 import asyncio
 import requests
 import json
-from random import randrange
+from random import randrange, sample
 from pprint import pprint
 from utils.color_util import red, green, yellow, cyan
 from datetime import datetime
@@ -19,9 +19,11 @@ class Strawpoll(commands.Cog):
     com_url = 'https://strawpoll.com/api/poll'
     com_delete_url = 'https://strawpoll.com/api/content/delete'
     lonely_message = '/////////////////////////\n**No votes recorded :(\nStopping polls.**\n/////////////////////////'
-    genre_interval = 10 #14400
-    movie_interval = 10 #1800
-    tie_interval = 10 #900
+    max_movies = 5
+    genre_interval = 30 #12600 # 3.5 hours
+    genre_tie_interval = 10 #1800 # 0.5 hours
+    movie_interval = 10 #1800 # 0.5 hours
+    movie_tie_interval = 1 #900 # 0.25 hours
     headers = {}
     should_update = False
     ended = False
@@ -109,7 +111,7 @@ class Strawpoll(commands.Cog):
     @tasks.loop(minutes=1)
     async def result_updater(self):
         if not self.should_update:
-            self.stop(self.context)
+            await self.stop(self.context)
             return
         try:
             await self.poll_message.edit(content=self.cur_results(self.poll_message.content[0:self.poll_message.content.find('\n```fix')]))
@@ -119,8 +121,17 @@ class Strawpoll(commands.Cog):
             self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
 
+    @commands.command()
+    async def tester(self, context):
+        await context.message.channel.send('<@&298241715888717824>')
+        pass
+
     @commands.command(hidden=True)
+    @commands.guild_only()
     async def weeklypoll(self, context):
+        if not isinstance(context.channel, discord.channel.DMChannel):
+            await context.message.delete()
+
         wait_time = 1
         self.status = 'genre'
         await self.poll_watcher_macro(context=context, title="Vote for a genre", status='genre', options=None, ma=True, interval=1)
@@ -139,7 +150,7 @@ class Strawpoll(commands.Cog):
                     await self.poll_watcher_macro(title="Genre tiebreaker", status='genre_tie', options=list(map(lambda winner: winner['answer'], self.winners)), ma=False, interval=1)
 
                 elif self.status == 'movie':
-                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[0]['answer']), ma=True, interval=1)
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=self.trim_movie_options(get_column(self.winners[0]['answer'])), ma=True, interval=1)
 
                 else:
                     await self.stop(self.context)
@@ -149,20 +160,20 @@ class Strawpoll(commands.Cog):
             # genre tie is starting
             if self.status == 'genre_tie':
                 self.status = 'genre_tie_ongoing'
-                wait_time = self.tie_interval
+                wait_time = self.genre_tie_interval
 
             # genre tiebreaker is ending
             elif self.status == 'genre_tie_ongoing':
                 await self.end(self.context)
 
                 if self.status == 'movie':
-                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[0]['answer']), ma=True, interval=1) 
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=self.trim_movie_options(get_column(self.winners[0]['answer'])), ma=True, interval=1) 
 
                 elif self.status == 'genre_tie_break':
                     await self.context.send('**Breaking tie randomly.**')
                     winner = randrange(0, len(self.winners))
                     await self.context.send(f'**Tie broken to {self.winners[winner]["answer"]}.**')
-                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=get_column(self.winners[winner]['answer']), ma=True, interval=1)
+                    await self.poll_watcher_macro(title="Vote for a movie", status='movie', options=self.trim_movie_options(get_column(self.winners[winner]['answer'])), ma=True, interval=1)
 
                 else:
                     await self.stop(self.context)
@@ -182,7 +193,7 @@ class Strawpoll(commands.Cog):
                     await self.poll_watcher_macro(title="Movie tiebreaker", status='movie_tie', options=list(map(lambda winner: winner['answer'], self.winners)), ma=False, interval=1)
 
                 elif self.status == 'ended':
-                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
+                    await self.context.send(f"<@&298241715888717824>\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
                     await self.stop(self.context)
                     self.status = 'ended'
                     self.should_update = False
@@ -198,14 +209,14 @@ class Strawpoll(commands.Cog):
 
             if self.status == 'movie_tie':
                 self.status = 'movie_tie_ongoing'
-                wait_time = self.tie_interval
+                wait_time = self.movie_tie_interval
 
             # movie tiebreaker is ending
             elif self.status == 'movie_tie_ongoing':
                 await self.end(self.context)
 
                 if self.status == 'ended':
-                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
+                    await self.context.send(f"<@&298241715888717824>\n```fix\nTonight's movie is: {self.winners[0]['answer']}```")
                     await self.stop(self.context)
                     self.status = 'ended'
                     self.should_update = False
@@ -215,7 +226,7 @@ class Strawpoll(commands.Cog):
                 elif self.status == 'movie_tie_break':
                     await self.context.send('**Breaking tie randomly.**')
                     winner = randrange(0, len(self.winners))
-                    await self.context.send(f"\n```fix\nTonight's movie is: {self.winners[winner]['answer']}```")
+                    await self.context.send(f"<@&298241715888717824>\n```fix\nTonight's movie is: {self.winners[winner]['answer']}```")
                     self.status = 'ended'
                     await self.stop(self.context)
                     wait_time = 0
@@ -242,14 +253,28 @@ class Strawpoll(commands.Cog):
             context = self.context
         await self.makepoll(context, poll_title=title, status=self.status, options=options, ma=ma)
 
+    def trim_movie_options(self, movies):
+        new_options = []
+
+        if len(movies) <= self.max_movies:
+            new_options = movies
+        else:
+            new_options = sample(movies, self.max_movies)
+
+        return new_options
+
     @commands.command(hidden=True)
-    @commands.guild_only()
     @commands.is_owner()
     async def stop(self, context):
         # self.poll_watcher.cancel()
         # self.poll_watcher.change_interval(seconds=1)
         self.result_updater.cancel()
         self.should_update = False
+        if not isinstance(context.channel, discord.channel.DMChannel):
+            try:
+                await context.message.delete()
+            except:
+                pass
 
     @commands.command()
     async def trying(self, context):
@@ -302,7 +327,7 @@ class Strawpoll(commands.Cog):
             self.poll['link'] = url
             self.poll['data'] = data
 
-            self.poll_message = await context.channel.send(self.cur_results(f'**{title}**: <{url}>'))
+            self.poll_message = await context.channel.send(self.cur_results(f'<@&298241715888717824>\n**{title}**: <{url}>'))
             self.status = status
             self.context = context
 
@@ -333,7 +358,7 @@ class Strawpoll(commands.Cog):
             self.poll['link'] = url
             self.poll['data'] = data
 
-            self.poll_message = await context.channel.send(f'**{title}:** {url}')
+            self.poll_message = await context.channel.send(f'<@&298241715888717824>\n**{title}:** {url}')
 
         else:
             await context.channel.send(f'Unrecongnized poll site.  Options: {self.movie_bot.command_prefix}makepoll com or {self.movie_bot.command_prefix}makepoll me\n(Default is me)')
