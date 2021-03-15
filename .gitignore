@@ -1,3 +1,13 @@
+# VSCode
+.vscode/
+
+# project-specific
+old/
+savedata/
+testing/
+activate.bat
+*.pickle
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
