@@ -2,10 +2,10 @@ import discord
 import asyncio
 import requests
 import json
+from datetime import datetime, timedelta
 from random import randrange, sample
 from pprint import pprint
 from utils.color_util import red, green, yellow, cyan
-from datetime import datetime
 from discord.ext import commands, tasks
 from utils.discord_util import get_or_fetch_user
 from utils.google_util import get_headers, get_column
@@ -20,10 +20,11 @@ class Strawpoll(commands.Cog):
     com_delete_url = 'https://strawpoll.com/api/content/delete'
     lonely_message = '/////////////////////////\n**No votes recorded :(\nStopping polls.**\n/////////////////////////'
     max_movies = 5
-    genre_interval = 30 #12600 # 3.5 hours
-    genre_tie_interval = 10 #1800 # 0.5 hours
-    movie_interval = 10 #1800 # 0.5 hours
-    movie_tie_interval = 1 #900 # 0.25 hours
+    genre_interval = 12600 # 3.5 hours
+    genre_tie_interval = 1800 # 0.5 hours
+    movie_interval_genre_tie = 1800 # 0.5 hours
+    movie_interval_no_genre_tie = 3600 # 1 hour
+    movie_tie_interval = 1200 # 0.33 hours
     headers = {}
     should_update = False
     ended = False
@@ -92,7 +93,7 @@ class Strawpoll(commands.Cog):
             message += "```"
 
             if not ended:
-                message += f"*(Updated {datetime.now().strftime('%a, %b %d  %H:%M:%S')} ET)*"
+                message += f"*(Updated {datetime.now().strftime('%a, %b %d  %I:%M:%S %p')} ET)*"
 
             if highest == 0:
                 self.winners = []
@@ -121,7 +122,8 @@ class Strawpoll(commands.Cog):
             self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
 
-    @commands.command()
+    @commands.command(hidden=True)
+    @commands.is_owner()
     async def tester(self, context):
         await context.message.channel.send('<@&298241715888717824>')
         pass
@@ -133,6 +135,7 @@ class Strawpoll(commands.Cog):
             await context.message.delete()
 
         wait_time = 1
+        was_genre_tie = False
         self.status = 'genre'
         await self.poll_watcher_macro(context=context, title="Vote for a genre", status='genre', options=None, ma=True, interval=1)
 
@@ -147,6 +150,7 @@ class Strawpoll(commands.Cog):
                 await self.end(self.context)
 
                 if self.status == 'genre_tie':
+                    was_genre_tie = True
                     await self.poll_watcher_macro(title="Genre tiebreaker", status='genre_tie', options=list(map(lambda winner: winner['answer'], self.winners)), ma=False, interval=1)
 
                 elif self.status == 'movie':
@@ -183,7 +187,8 @@ class Strawpoll(commands.Cog):
             # inital movie poll starting
             if self.status in ['movie', 'genre_tie_break']:
                 self.status = 'movie_ongoing'
-                wait_time = self.movie_interval
+                wait_time = self.movie_interval_genre_tie if was_genre_tie else self.movie_interval_no_genre_tie
+                was_genre_tie = False
 
             # movie poll is ending
             elif self.status == 'movie_ongoing':
@@ -244,6 +249,9 @@ class Strawpoll(commands.Cog):
                 wait_time = 0
                 break
 
+            if wait_time > 0:
+                await self.context.send(f"__Poll ends {(datetime.now() + timedelta(seconds=wait_time)).strftime('%a, %b %d  %I:%M:%S %p')} ET__")
+
             await asyncio.sleep(wait_time)
 
         self.status = "genre"
@@ -276,12 +284,13 @@ class Strawpoll(commands.Cog):
             except:
                 pass
 
-    @commands.command()
+    @commands.command(hidden=True)
+    @commands.is_owner()
     async def trying(self, context):
         await asyncio.sleep(5)
         await context.channel.send('testing')
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.guild_only()
     @commands.is_owner()
     async def makepoll(self, context, poll_site='com', poll_title=None, status="genre", options=None, ma=True): # , options=None): #TODO: in the future allow manual poll creation?
@@ -392,8 +401,9 @@ class Strawpoll(commands.Cog):
             except:
                 self.result_updater.restart()
 
-    @commands.command()
+    @commands.command(hidden=True)
     @commands.guild_only()
+    @commands.is_owner()
     async def end(self, context, silent=False):
         if self.poll is None:
             poll_file = open('savedata\\poll.json','r')
