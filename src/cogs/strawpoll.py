@@ -2,10 +2,10 @@ import discord
 import asyncio
 import requests
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from random import randrange, sample
 from pprint import pprint
-from utils.color_util import red, green, yellow, cyan
+from utils.color_util import red, green, yellow, cyan, dark_cyan
 from discord.ext import commands, tasks
 from utils.discord_util import get_or_fetch_user
 from utils.google_util import get_headers, get_column
@@ -25,6 +25,10 @@ class Strawpoll(commands.Cog):
     movie_interval_genre_tie = 1800 # 0.5 hours
     movie_interval_no_genre_tie = 3600 # 1 hour
     movie_tie_interval = 1200 # 0.33 hours
+    next_poll = None
+    poll_day = 6
+    poll_hour = 16
+    poll_minute = 30
     headers = {}
     should_update = False
     ended = False
@@ -49,6 +53,14 @@ class Strawpoll(commands.Cog):
         self.status = "genre"
         self.winners = None
         self.context = None
+        self.next_poll = self.next_sunday()
+
+    @commands.command(hidden=True)
+    @commands.is_owner()
+    @commands.guild_only()
+    async def startup(self, context):
+        self.context = context
+        self.time_checker.start()
 
     # check the results of current poll and return a string that can be sent on discord
     def cur_results(self, prefix='', ended=False):
@@ -121,12 +133,34 @@ class Strawpoll(commands.Cog):
             print('Loop ' + red('stopped'))
             self.should_update = False
         await asyncio.sleep(self.result_updater.seconds)
+    
+    def next_sunday(self):
+        now = datetime.now()
+        sunday = now + timedelta(days=self.poll_day - now.weekday())
+        return sunday
 
-    @commands.command(hidden=True)
-    @commands.is_owner()
-    async def tester(self, context):
-        await context.message.channel.send('<@&298241715888717824>')
-        pass
+    @tasks.loop(seconds=15)
+    async def time_checker(self):
+        next_wake = self.time_checker.seconds
+        now = datetime.now()
+        if now.day == self.next_poll.day:
+            if now.time() >= time(self.poll_hour, self.poll_minute):
+                self.next_poll = self.next_poll + timedelta(days=7)
+
+                await self.weeklypoll(self.context)
+
+                now = datetime.now()
+                next_time = (datetime(year=self.next_poll.year, month=self.next_poll.month, day=self.next_poll.day, hour=self.poll_hour, minute=self.poll_minute, second=0) - now)
+                next_wake = next_time.seconds + next_time.days * 86400
+
+            else:
+                next_wake = (datetime(year=self.next_poll.year, month=self.next_poll.month, day=self.next_poll.day, hour=self.poll_hour, minute=self.poll_minute, second=0) - now).seconds
+        else:
+            next_time = (datetime(year=self.next_poll.year, month=self.next_poll.month, day=self.next_poll.day, hour=self.poll_hour, minute=self.poll_minute, second=0) - now)
+            next_wake = next_time.seconds + next_time.days * 86400
+        
+        print(f"Next poll wake is: " + dark_cyan(f"{(datetime.now() + timedelta(seconds=next_wake)).strftime('%a, %b %d  %I:%M:%S %p')}"))
+        await asyncio.sleep(next_wake)
 
     @commands.command(hidden=True)
     @commands.guild_only()
