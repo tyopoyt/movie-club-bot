@@ -25,7 +25,10 @@ class Utilities(commands.Cog):
     @commands.command(aliases=['dms'])
     async def dm(self, context):
         user = context.message.author.id
-        await context.message.delete()
+        try:
+            await context.message.delete()
+        except:
+            pass
 
         dm_file = open('savedata\\dms.json','r')
         dms_dict = json.loads(dm_file.read())
@@ -43,7 +46,10 @@ class Utilities(commands.Cog):
     @commands.command(aliases=['nodms'])
     async def nodm(self, context):
         user = context.message.author.id
-        await context.message.delete()
+        try:
+            await context.message.delete()
+        except:
+            pass
 
         dm_file = open('savedata\\dms.json','r')
         dms_dict = json.loads(dm_file.read())

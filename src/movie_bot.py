@@ -13,7 +13,10 @@ async def on_ready():
 @movie_bot.command(hidden=True, aliases=['relaod'])
 async def reload(context):
     if not isinstance(context.channel, discord.channel.DMChannel):
-        await context.message.delete()
+        try:
+            await context.message.delete()
+        except:
+            pass
 
     if str(context.message.author) in admins:        
         reload_cogs()

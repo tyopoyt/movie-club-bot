@@ -166,7 +166,10 @@ class Strawpoll(commands.Cog):
     @commands.guild_only()
     async def weeklypoll(self, context):
         if not isinstance(context.channel, discord.channel.DMChannel):
-            await context.message.delete()
+            try:
+                await context.message.delete()
+            except:
+                pass
 
         wait_time = 1
         was_genre_tie = False
